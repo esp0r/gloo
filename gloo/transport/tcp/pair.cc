@@ -416,7 +416,7 @@ bool Pair::write(Op& op) {
     GLOO_ENFORCE_EQ(op.nwritten, op.preamble.nbytes);
     break;
   }
-
+  logger_.logEvent(rank_, "Send request executed");
   writeComplete(op, buf, opcode);
   return true;
 }
@@ -945,11 +945,13 @@ void Pair::verifyConnected() {
 // Only applicable to synchronous mode. May block.
 void Pair::sendSyncMode(Op& op) {
   GLOO_ENFORCE(sync_);
+  logger_.logEvent(rank_, "Send request submitted");
   auto rv = write(op);
   if (!rv) {
     GLOO_ENFORCE(ex_ != nullptr);
     std::rethrow_exception(ex_);
   }
+  logger_.logEvent(rank_, "Send request completed");
 }
 
 // Sends contents of operation to the remote side of the pair.
@@ -957,6 +959,8 @@ void Pair::sendSyncMode(Op& op) {
 // Only applicable to asynchronous mode. Never blocks.
 void Pair::sendAsyncMode(Op& op) {
   GLOO_ENFORCE(!sync_);
+
+  logger_.logEvent(rank_, "Send request submitted");
 
   // If an earlier operation hasn't finished transmitting,
   // add this operation to the transmit queue.
@@ -968,6 +972,7 @@ void Pair::sendAsyncMode(Op& op) {
   // Write in place without checking socket for writeability.
   // This is the fast path.
   if (write(op)) {
+    logger_.logEvent(rank_, "Send request completed");
     return;
   }
 

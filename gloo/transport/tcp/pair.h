@@ -27,6 +27,7 @@
 
 #include "gloo/common/error.h"
 #include "gloo/common/memory.h"
+#include "gloo/common/logger.h"
 #include "gloo/transport/pair.h"
 #include "gloo/transport/tcp/address.h"
 #include "gloo/transport/tcp/device.h"
@@ -352,6 +353,8 @@ class Pair : public ::gloo::transport::Pair, public Handler {
   // Cache exception such that it can be rethrown if any function on
   // this instance is called again when it is in an error state.
   std::exception_ptr ex_;
+
+  Logger logger_;
 };
 
 } // namespace tcp
