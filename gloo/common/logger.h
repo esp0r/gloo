@@ -9,9 +9,27 @@
 #include <nlohmann/json.hpp>
 #include <sys/file.h> // for flock
 
+// struct gloo::transport::tcp::Op
+
+struct Header {
+  size_t nbytes;
+  size_t opcode;
+  size_t slot;
+  size_t offset;
+  size_t length;
+  size_t roffset;
+
+  Header(size_t nbytes, size_t opcode, size_t slot, size_t offset, size_t length, size_t roffset)
+      : nbytes(nbytes), opcode(opcode), slot(slot), offset(offset), length(length), roffset(roffset) {}
+};
+
 struct LogEntry {
   std::string event;
+  Header header;
   std::chrono::high_resolution_clock::time_point timestamp;
+
+  LogEntry(const std::string& event, const Header& header, std::chrono::high_resolution_clock::time_point timestamp)
+      : event(event), header(header), timestamp(timestamp) {}
 };
 
 class Logger {
@@ -46,11 +64,12 @@ public:
     log_thread_.join();
   }
 
-  void logEvent(const std::string& event) {
+  void logEvent(const std::string& event, size_t nbytes, size_t opcode, size_t slot, size_t offset, size_t length, size_t roffset) {
     auto now = std::chrono::high_resolution_clock::now();
+    Header header(nbytes, opcode, slot, offset, length, roffset);
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      current_buffer_.emplace_back(LogEntry{event, now});
+      current_buffer_.emplace_back(LogEntry{event, header, now});
       if (current_buffer_.size() >= buffer_max_depth_) {
         cv_.notify_all();
       }
@@ -96,6 +115,15 @@ private:
           log_entry["to_rank"] = to_rank_;
           log_entry["event"] = log.event;
           log_entry["timestamp"] = time_since_start;
+          log_entry["header"] = {
+              {"nbytes", log.header.nbytes},
+              {"opcode", log.header.opcode},
+              {"slot", log.header.slot},
+              {"offset", log.header.offset},
+              {"length", log.header.length},
+              {"roffset", log.header.roffset}
+          };
+
 
           // Write the JSON object to the log file
           log_file << log_entry.dump() << std::endl;
