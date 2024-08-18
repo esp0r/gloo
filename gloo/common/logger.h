@@ -7,13 +7,11 @@
 #include <condition_variable>
 #include <cstdlib>
 
-// Log entry structure
 struct LogEntry {
   std::string event;
   std::chrono::high_resolution_clock::time_point timestamp;
 };
 
-// Logger class to handle logging
 class Logger {
 public:
   Logger(int rank) : done_(false), rank_(rank) {
@@ -48,33 +46,43 @@ public:
 
   void logEvent(const std::string& event) {
     auto now = std::chrono::high_resolution_clock::now();
-    std::lock_guard<std::mutex> lock(mutex_);
-    logs_.emplace_back(LogEntry{event, now});
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      current_buffer_.emplace_back(LogEntry{event, now});
+    }
     cv_.notify_all();
   }
 
 private:
   void writeLogsToFile() {
     std::ofstream log_file(log_file_path_, std::ios::out | std::ios::app);
-    while (true) {
-      std::unique_lock<std::mutex> lock(mutex_);
-      cv_.wait(lock, [this] { return !logs_.empty() || done_; });
+    std::vector<LogEntry> buffer_to_write;
 
-      if (done_ && logs_.empty()) {
-        break;
+    while (true) {
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cv_.wait(lock, [this] { return !current_buffer_.empty() || done_; });
+
+        if (done_ && current_buffer_.empty()) {
+          break;
+        }
+
+        // Swap buffers
+        std::swap(current_buffer_, buffer_to_write);
       }
 
-      for (const auto& log : logs_) {
+      // Write logs from buffer_to_write to file
+      for (const auto& log : buffer_to_write) {
         auto time_since_start = std::chrono::duration_cast<std::chrono::microseconds>(
           log.timestamp.time_since_epoch()).count();
         log_file << "Event: " << log.event << ", Timestamp: " << time_since_start << " us\n";
       }
-      logs_.clear();
+      buffer_to_write.clear();
     }
   }
 
   std::chrono::system_clock::time_point start_time_;
-  std::vector<LogEntry> logs_;
+  std::vector<LogEntry> current_buffer_;
   std::mutex mutex_;
   std::condition_variable cv_;
   std::thread log_thread_;
