@@ -14,7 +14,8 @@ struct LogEntry {
 
 class Logger {
 public:
-  Logger(int rank) : done_(false), rank_(rank) {
+  Logger(int rank, size_t buffer_max_depth = 10) 
+    : done_(false), rank_(rank), buffer_max_depth_(buffer_max_depth) {
     // Initialize start time
     start_time_ = std::chrono::system_clock::now();
 
@@ -49,8 +50,10 @@ public:
     {
       std::lock_guard<std::mutex> lock(mutex_);
       current_buffer_.emplace_back(LogEntry{event, now});
+      if (current_buffer_.size() >= buffer_max_depth_) {
+        cv_.notify_all();
+      }
     }
-    cv_.notify_all();
   }
 
 private:
@@ -90,4 +93,5 @@ private:
   int rank_;
   std::string log_dir_;
   std::string log_file_path_;
+  size_t buffer_max_depth_;
 };
