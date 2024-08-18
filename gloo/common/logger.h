@@ -15,8 +15,7 @@ struct LogEntry {
 
 class Logger {
 public:
-  Logger(int rank, size_t buffer_max_depth = 10) 
-    : done_(false), rank_(rank), buffer_max_depth_(buffer_max_depth) {
+  Logger(int from_rank, int to_rank) : done_(false), from_rank_(from_rank), to_rank_(to_rank), buffer_max_depth_(10) {
     // Initialize start time
     start_time_ = std::chrono::system_clock::now();
 
@@ -32,7 +31,7 @@ public:
     }
 
     // Set log file path for this rank
-    log_file_path_ = log_dir_ + "gloo_log_rank_" + std::to_string(rank_) + ".txt";
+    log_file_path_ = log_dir_ + "gloo_log_rank_" + std::to_string(from_rank_) + ".txt";
 
     log_thread_ = std::thread(&Logger::writeLogsToFile, this);
   }
@@ -89,7 +88,8 @@ private:
       for (const auto& log : buffer_to_write) {
         auto time_since_start = std::chrono::duration_cast<std::chrono::microseconds>(
           log.timestamp.time_since_epoch()).count();
-        log_file << "Event: " << log.event << ", Timestamp: " << time_since_start << " us\n";
+        // log destination rank, event, and timestamp
+        log_file << "from_rank=" << from_rank_ << " to_rank=" << to_rank_ << " event=" << log.event << " timestamp=" << time_since_start << std::endl;
       }
       buffer_to_write.clear();
 
@@ -108,7 +108,8 @@ private:
   std::condition_variable cv_;
   std::thread log_thread_;
   bool done_;
-  int rank_;
+  int from_rank_;
+  int to_rank_;
   std::string log_dir_;
   std::string log_file_path_;
   size_t buffer_max_depth_;

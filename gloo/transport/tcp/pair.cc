@@ -63,7 +63,7 @@ Pair::Pair(
       sendBufferSize_(0),
       is_client_(false),
       ex_(nullptr),
-      logger_(rank) {
+      logger_(context_->rank, rank) {
   listen();
 }
 
