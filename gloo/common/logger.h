@@ -6,6 +6,7 @@
 #include <fstream>
 #include <condition_variable>
 #include <cstdlib>
+#include <nlohmann/json.hpp>
 #include <sys/file.h> // for flock
 
 struct LogEntry {
@@ -86,10 +87,18 @@ private:
 
       // Write logs from buffer_to_write to file
       for (const auto& log : buffer_to_write) {
-        auto time_since_start = std::chrono::duration_cast<std::chrono::microseconds>(
-          log.timestamp.time_since_epoch()).count();
-        // log destination rank, event, and timestamp
-        log_file << "from_rank=" << from_rank_ << " to_rank=" << to_rank_ << " event=" << log.event << " timestamp=" << time_since_start << std::endl;
+          auto time_since_start = std::chrono::duration_cast<std::chrono::microseconds>(
+              log.timestamp.time_since_epoch()).count();
+
+          // Create a JSON object for the log entry
+          nlohmann::json log_entry;
+          log_entry["from_rank"] = from_rank_;
+          log_entry["to_rank"] = to_rank_;
+          log_entry["event"] = log.event;
+          log_entry["timestamp"] = time_since_start;
+
+          // Write the JSON object to the log file
+          log_file << log_entry.dump() << std::endl;
       }
       buffer_to_write.clear();
 

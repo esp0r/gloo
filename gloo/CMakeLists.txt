@@ -165,6 +165,17 @@ elseif(USE_TCP_OPENSSL_LOAD)
   target_link_libraries(gloo PRIVATE dl)
 endif()
 
+include(FetchContent)
+
+FetchContent_Declare(
+  json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.10.5
+)
+
+FetchContent_MakeAvailable(json)
+target_link_libraries(gloo PRIVATE nlohmann_json::nlohmann_json)
+
 target_link_libraries(gloo PRIVATE ${gloo_DEPENDENCY_LIBS})
 
 # Add Interface include directories that are relocatable.
@@ -180,6 +191,8 @@ endif()
 # If the Gloo build is included from another project's build, it may
 # want to statically link with Gloo and not install any artifacts.
 if(GLOO_INSTALL)
+  install(TARGETS nlohmann_json EXPORT GlooTargets
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
   install(TARGETS gloo EXPORT GlooTargets
       DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
   if(USE_CUDA)
