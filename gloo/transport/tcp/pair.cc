@@ -743,11 +743,14 @@ void Pair::handleReadWrite(int events) {
         !tx_.empty(), "tx_ cannot be empty because EPOLLOUT happened");
     while (!tx_.empty()) {
       auto& op = tx_.front();
+      if(op.nwritten == 0)
+        logger_.logEvent("Send request executed ", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
       if (!write(op)) {
         // Write did not complete; wait for epoll.
         break;
       }
       // Write completed; remove from queue.
+      logger_.logEvent("Send request completed", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
       tx_.pop_front();
     }
     // If there is nothing to transmit; remove EPOLLOUT.
@@ -963,7 +966,7 @@ void Pair::sendSyncMode(Op& op) {
 void Pair::sendAsyncMode(Op& op) {
   GLOO_ENFORCE(!sync_);
   if(op.getOpcode()==Op::SEND_BUFFER || op.getOpcode()==Op::SEND_UNBOUND_BUFFER)
-    logger_.logEvent("Send request submitted", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset);
+    logger_.logEvent("Send request submitted", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
 
   // If an earlier operation hasn't finished transmitting,
   // add this operation to the transmit queue.
@@ -976,7 +979,7 @@ void Pair::sendAsyncMode(Op& op) {
   // This is the fast path.
   if (write(op)) {
     if(op.getOpcode()==Op::SEND_BUFFER || op.getOpcode()==Op::SEND_UNBOUND_BUFFER)
-      logger_.logEvent("Send request completed", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset);
+      logger_.logEvent("Send request completed", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
     return;
   }
 

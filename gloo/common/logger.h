@@ -6,6 +6,7 @@
 #include <fstream>
 #include <condition_variable>
 #include <cstdlib>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include <sys/file.h> // for flock
 
@@ -26,10 +27,12 @@ struct Header {
 struct LogEntry {
   std::string event;
   Header header;
+  int nread;
+  int nwritten;
   std::chrono::high_resolution_clock::time_point timestamp;
 
-  LogEntry(const std::string& event, const Header& header, std::chrono::high_resolution_clock::time_point timestamp)
-      : event(event), header(header), timestamp(timestamp) {}
+  LogEntry(const std::string& event, const Header& header, int nread, int nwritten, const std::chrono::high_resolution_clock::time_point& timestamp)
+      : event(event), header(header), nread(nread), nwritten(nwritten), timestamp(timestamp) {}
 };
 
 class Logger {
@@ -64,12 +67,12 @@ public:
     log_thread_.join();
   }
 
-  void logEvent(const std::string& event, size_t nbytes, size_t opcode, size_t slot, size_t offset, size_t length, size_t roffset) {
+  void logEvent(const std::string& event, size_t nbytes, size_t opcode, size_t slot, size_t offset, size_t length, size_t roffset, int nread, int nwritten) {
     auto now = std::chrono::high_resolution_clock::now();
     Header header(nbytes, opcode, slot, offset, length, roffset);
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      current_buffer_.emplace_back(LogEntry{event, header, now});
+      current_buffer_.emplace_back(LogEntry{event, header, nread, nwritten, now});
       if (current_buffer_.size() >= buffer_max_depth_) {
         cv_.notify_all();
       }
@@ -115,6 +118,9 @@ private:
           log_entry["to_rank"] = to_rank_;
           log_entry["event"] = log.event;
           log_entry["timestamp"] = time_since_start;
+          // express in 0x format
+          log_entry["nread"] = log.nread;
+          log_entry["nwritten"] = log.nwritten;
           log_entry["header"] = {
               {"nbytes", log.header.nbytes},
               {"opcode", log.header.opcode},
