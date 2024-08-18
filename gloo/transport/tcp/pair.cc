@@ -684,6 +684,7 @@ void Pair::handleRemotePendingRecv(const Op& op) {
     if (queue.empty()) {
       localPendingSend_.erase(it);
     }
+    logger_.logEvent("Send request executed", nbytes);
     sendUnboundBuffer(std::move(buf), slot, offset, nbytes);
     return;
   }
@@ -743,14 +744,14 @@ void Pair::handleReadWrite(int events) {
         !tx_.empty(), "tx_ cannot be empty because EPOLLOUT happened");
     while (!tx_.empty()) {
       auto& op = tx_.front();
-      if(op.nwritten == 0)
-        logger_.logEvent("Send request executed ", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
+      // if(op.nwritten == 0)
+        // logger_.logEvent("Send request executed ", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
       if (!write(op)) {
         // Write did not complete; wait for epoll.
         break;
       }
       // Write completed; remove from queue.
-      logger_.logEvent("Send request completed", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
+      logger_.logEvent("Send request completed", op.preamble.nbytes);
       tx_.pop_front();
     }
     // If there is nothing to transmit; remove EPOLLOUT.
@@ -965,8 +966,8 @@ void Pair::sendSyncMode(Op& op) {
 // Only applicable to asynchronous mode. Never blocks.
 void Pair::sendAsyncMode(Op& op) {
   GLOO_ENFORCE(!sync_);
-  if(op.getOpcode()==Op::SEND_BUFFER || op.getOpcode()==Op::SEND_UNBOUND_BUFFER)
-    logger_.logEvent("Send request submitted", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
+  // if(op.getOpcode()==Op::SEND_BUFFER || op.getOpcode()==Op::SEND_UNBOUND_BUFFER)
+    // logger_.logEvent("Send request submitted", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
 
   // If an earlier operation hasn't finished transmitting,
   // add this operation to the transmit queue.
@@ -978,8 +979,8 @@ void Pair::sendAsyncMode(Op& op) {
   // Write in place without checking socket for writeability.
   // This is the fast path.
   if (write(op)) {
-    if(op.getOpcode()==Op::SEND_BUFFER || op.getOpcode()==Op::SEND_UNBOUND_BUFFER)
-      logger_.logEvent("Send request completed", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
+    // if(op.getOpcode()==Op::SEND_BUFFER || op.getOpcode()==Op::SEND_UNBOUND_BUFFER)
+      // logger_.logEvent("Send request completed", op.preamble.nbytes, op.preamble.opcode, op.preamble.slot, op.preamble.roffset, op.preamble.length, op.preamble.offset, op.nread, op.nwritten);
     return;
   }
 
@@ -1064,6 +1065,8 @@ void Pair::send(
   std::unique_lock<std::mutex> lock(m_);
   throwIfException();
 
+  logger_.logEvent("Send request submitted", nbytes);
+
   // Execute this send if there is a remote pending receive.
   Context::Mutator mutator(*context_, slot, rank_);
   if (mutator.shiftRemotePendingRecv()) {
@@ -1072,6 +1075,7 @@ void Pair::send(
     // for this send operation yet so we need to take special care
     // their count is updated regardless.
     sendNotifySendReady(slot, nbytes);
+    logger_.logEvent("Send request executed", nbytes);
     sendUnboundBuffer(std::move(buf), slot, offset, nbytes);
     return;
   }

@@ -10,29 +10,13 @@
 #include <nlohmann/json.hpp>
 #include <sys/file.h> // for flock
 
-// struct gloo::transport::tcp::Op
-
-struct Header {
-  size_t nbytes;
-  size_t opcode;
-  size_t slot;
-  size_t offset;
-  size_t length;
-  size_t roffset;
-
-  Header(size_t nbytes, size_t opcode, size_t slot, size_t offset, size_t length, size_t roffset)
-      : nbytes(nbytes), opcode(opcode), slot(slot), offset(offset), length(length), roffset(roffset) {}
-};
-
 struct LogEntry {
   std::string event;
-  Header header;
-  int nread;
-  int nwritten;
+  size_t nbytes;
+  // void *buffer_addr;
   std::chrono::high_resolution_clock::time_point timestamp;
-
-  LogEntry(const std::string& event, const Header& header, int nread, int nwritten, const std::chrono::high_resolution_clock::time_point& timestamp)
-      : event(event), header(header), nread(nread), nwritten(nwritten), timestamp(timestamp) {}
+  LogEntry(const std::string& event, size_t nbytes, std::chrono::high_resolution_clock::time_point timestamp)
+      : event(event), nbytes(nbytes), timestamp(timestamp) {}
 };
 
 class Logger {
@@ -67,12 +51,11 @@ public:
     log_thread_.join();
   }
 
-  void logEvent(const std::string& event, size_t nbytes, size_t opcode, size_t slot, size_t offset, size_t length, size_t roffset, int nread, int nwritten) {
+  void logEvent(const std::string& event, size_t nbytes) {
     auto now = std::chrono::high_resolution_clock::now();
-    Header header(nbytes, opcode, slot, offset, length, roffset);
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      current_buffer_.emplace_back(LogEntry{event, header, nread, nwritten, now});
+      current_buffer_.emplace_back(LogEntry{event, nbytes, now});
       if (current_buffer_.size() >= buffer_max_depth_) {
         cv_.notify_all();
       }
@@ -117,18 +100,20 @@ private:
           log_entry["from_rank"] = from_rank_;
           log_entry["to_rank"] = to_rank_;
           log_entry["event"] = log.event;
+          log_entry["nbytes"] = log.nbytes;
+          // log_entry["buffer_addr"] = log.buffer_addr;
           log_entry["timestamp"] = time_since_start;
           // express in 0x format
-          log_entry["nread"] = log.nread;
-          log_entry["nwritten"] = log.nwritten;
-          log_entry["header"] = {
-              {"nbytes", log.header.nbytes},
-              {"opcode", log.header.opcode},
-              {"slot", log.header.slot},
-              {"offset", log.header.offset},
-              {"length", log.header.length},
-              {"roffset", log.header.roffset}
-          };
+          // log_entry["nread"] = log.nread;
+          // log_entry["nwritten"] = log.nwritten;
+          // log_entry["header"] = {
+          //     {"nbytes", log.header.nbytes},
+          //     {"opcode", log.header.opcode},
+          //     {"slot", log.header.slot},
+          //     {"offset", log.header.offset},
+          //     {"length", log.header.length},
+          //     {"roffset", log.header.roffset}
+          // };
 
 
           // Write the JSON object to the log file
