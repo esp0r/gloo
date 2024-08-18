@@ -6,6 +6,7 @@
 #include <fstream>
 #include <condition_variable>
 #include <cstdlib>
+#include <sys/file.h> // for flock
 
 struct LogEntry {
   std::string event;
@@ -59,6 +60,11 @@ public:
 private:
   void writeLogsToFile() {
     std::ofstream log_file(log_file_path_, std::ios::out | std::ios::app);
+    int fd = open(log_file_path_.c_str(), O_WRONLY | O_APPEND);
+    if (fd == -1) {
+      throw std::runtime_error("Failed to open log file");
+    }
+
     std::vector<LogEntry> buffer_to_write;
 
     while (true) {
@@ -74,6 +80,11 @@ private:
         std::swap(current_buffer_, buffer_to_write);
       }
 
+      // Lock the file
+      if (flock(fd, LOCK_EX) == -1) {
+        throw std::runtime_error("Failed to lock log file");
+      }
+
       // Write logs from buffer_to_write to file
       for (const auto& log : buffer_to_write) {
         auto time_since_start = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -81,7 +92,14 @@ private:
         log_file << "Event: " << log.event << ", Timestamp: " << time_since_start << " us\n";
       }
       buffer_to_write.clear();
+
+      // Unlock the file
+      if (flock(fd, LOCK_UN) == -1) {
+        throw std::runtime_error("Failed to unlock log file");
+      }
     }
+
+    close(fd);
   }
 
   std::chrono::system_clock::time_point start_time_;
